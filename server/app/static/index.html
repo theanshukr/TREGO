@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TREGO — Tell it. Let it go.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css" />
+  <script>if(localStorage.getItem('trego-theme')==='light')document.documentElement.classList.add('light');</script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <div class="trego-logo-icon">
+            <svg viewBox="0 0 32 32" width="28" height="28" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="16" cy="16" r="14" stroke="url(#logoGrad)" stroke-width="3"/>
+              <path d="M11 16L15 20L22 12" stroke="#00f0ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+              <defs>
+                <linearGradient id="logoGrad" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#4f46e5"/>
+                  <stop offset="0.5" stop-color="#06b6d4"/>
+                  <stop offset="1" stop-color="#10b981"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div class="trego-brand-text">
+            <h1>TREGO</h1>
+            <span class="trego-tagline">Tell it. Let it go.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Goal Tracker Widget (Live State) -->
+      <div class="goal-tracker-card" id="goal-tracker" style="display:none;">
+        <div class="tracker-header">
+          <span class="tracker-label">ACTIVE GOAL</span>
+          <span class="tracker-status-badge" id="tracker-status-badge">INSPECTING</span>
+        </div>
+        <div class="tracker-goal-name" id="tracker-goal-name">C++ Environment Setup</div>
+        <div class="tracker-progress-track">
+          <div class="tracker-step" data-phase="understand"><span>1</span><label>Goal</label></div>
+          <div class="tracker-step" data-phase="inspect"><span>2</span><label>Inspect</label></div>
+          <div class="tracker-step" data-phase="plan"><span>3</span><label>Plan</label></div>
+          <div class="tracker-step" data-phase="permission"><span>4</span><label>Ask</label></div>
+          <div class="tracker-step" data-phase="act"><span>5</span><label>Act</label></div>
+          <div class="tracker-step" data-phase="troubleshoot"><span>6</span><label>Fix</label></div>
+          <div class="tracker-step" data-phase="verify"><span>7</span><label>Verify</label></div>
+        </div>
+      </div>
+
+      <!-- Conversations -->
+      <div class="conversations-section">
+        <div class="conversations-header">
+          <h3 class="section-label" style="margin:0;">Workflows</h3>
+          <button class="btn-new-chat" id="btn-new-chat" title="New goal">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+        <div class="conv-list" id="conv-list"></div>
+      </div>
+
+      <!-- IT / Admin Portal Link -->
+      <div style="margin-top: auto; padding-top: 24px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:0 10px 12px;">
+          <button class="theme-toggle-main" id="mainThemeToggle" onclick="toggleMainTheme()" title="Switch theme">
+            <div class="toggle-track-main"><div class="toggle-thumb-main"></div></div>
+            <span id="mainThemeLabel">Light</span>
+          </button>
+          <span id="status" class="status disconnected">offline</span>
+        </div>
+        <a href="/it" class="it-portal-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Solutions KB
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto;opacity:0.5"><polyline points="9 18 15 12 9 6"/></svg>
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="workspace">
+      <div id="chat">
+        <div class="typing-indicator" id="typing-indicator" style="display:none;">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+      
+      <div class="input-area">
+        <input type="file" id="img-input" accept="image/*" style="display:none;position:absolute;" />
+        <form id="composer" autocomplete="off">
+          <div id="img-preview-bar" class="img-preview-bar" style="display:none;">
+            <div class="img-preview-wrap">
+              <img id="img-preview-thumb" src="" alt="preview" />
+              <button type="button" id="img-remove-btn" class="img-remove-btn" title="Remove image">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="input-wrapper">
+            <!-- Voice Input Mic Button (Web Speech API) -->
+            <button type="button" class="btn-icon voice-btn" id="voice-btn" title="Voice Input (Click to speak)">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            </button>
+            <button type="button" class="btn-icon img-btn" id="img-btn" title="Attach screenshot / image">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </button>
+            <input
+              id="input"
+              type="text"
+              placeholder="Tell TREGO your goal (e.g. 'Set up C++ development', 'Get Flutter running')..."
+              autofocus
+            />
+            <div class="model-selector" id="model-selector">
+              <span id="model-selected">Autonomous Agent</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              <div class="model-dropdown" id="model-dropdown">
+                <div class="model-option active" data-value="control">Autonomous Agent (Control)</div>
+                <div class="model-option" data-value="guide">Guide Mode (Teach Me)</div>
+              </div>
+            </div>
+            <button type="submit" class="btn-send" id="btn-send" title="Send goal">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+            <button type="button" class="btn-stop" id="btn-stop" title="Stop agent" style="display:none;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            </button>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <!-- Voice Audio Player (ElevenLabs playback) -->
+  <audio id="elevenlabs-audio" style="display:none;"></audio>
+
+  <!-- Enhanced Permission Modal (What, Why, Impact) -->
+  <div id="permission-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);align-items:center;justify-content:center;z-index:9999;">
+    <div style="background:#131b2e;border:1px solid #2a3b5c;border-radius:16px;padding:32px 28px;text-align:left;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.7);">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <div style="background:rgba(239,68,68,0.15);color:#ef4444;border-radius:10px;padding:8px 12px;font-weight:700;font-size:0.85rem;letter-spacing:0.5px;">PERMISSION REQUIRED</div>
+        <span id="perm-risk-badge" style="font-size:0.75rem;color:#f59e0b;background:rgba(245,158,11,0.12);padding:4px 8px;border-radius:6px;">HIGH RISK</span>
+      </div>
+      <h3 style="margin:0 0 14px;font-size:1.2rem;color:#fff;font-weight:600;" id="perm-title">Execute System Action?</h3>
+      <div style="background:#0b1120;border-radius:10px;padding:14px;margin-bottom:16px;font-family:'JetBrains Mono',monospace;font-size:0.85rem;color:#38bdf8;word-break:break-all;" id="perm-command">winget install ...</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px;font-size:0.88rem;color:#94a3b8;">
+        <div><strong style="color:#e2e8f0;">What will happen:</strong> <span id="perm-what">Installs software</span></div>
+        <div><strong style="color:#e2e8f0;">Why required:</strong> <span id="perm-why">Needed for C++ compilation</span></div>
+        <div><strong style="color:#e2e8f0;">Impact:</strong> <span id="perm-impact">Modifies system PATH</span></div>
+      </div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;">
+        <button id="btn-deny-kb" style="padding:10px 20px;border-radius:8px;background:transparent;color:#ef4444;border:1px solid rgba(239,68,68,0.5);cursor:pointer;font-size:0.92rem;font-family:inherit;font-weight:500;">Deny &amp; Stop</button>
+        <button id="btn-allow-kb" style="padding:10px 24px;border-radius:8px;background:linear-gradient(135deg, #4f46e5, #06b6d4);color:#fff;border:none;cursor:pointer;font-size:0.92rem;font-family:inherit;font-weight:600;">Allow Action</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    function toggleMainTheme() {
+      const html = document.documentElement;
+      const label = document.getElementById('mainThemeLabel');
+      if (html.classList.contains('light')) {
+        html.classList.remove('light');
+        label.textContent = 'Dark';
+        localStorage.setItem('trego-theme', 'dark');
+      } else {
+        html.classList.add('light');
+        label.textContent = 'Light';
+        localStorage.setItem('trego-theme', 'light');
+      }
+    }
+  </script>
+</body>
+</html>
