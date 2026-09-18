@@ -224,7 +224,7 @@ def _connect() -> psycopg.Connection:
     return psycopg.connect(
         settings.database_url,
         row_factory=dict_row,
-        connect_timeout=5,
+        connect_timeout=1,
     )
 
 

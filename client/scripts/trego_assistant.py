@@ -24,84 +24,113 @@ CONFIG_FILE    = os.path.join(_REPO_ROOT, "trego_assistant_config.json")
 ROBOT_SIZE     = 72
 
 def _make_robot_svg(ry_left=5.8, ry_right=None, thinking=False, glow=1.0):
-    """Return SVG string. thinking=True → eyes look upward.
-
-    Bakes the web UI's three CSS-driven effects directly into the SVG so
-    QSvgWidget produces a matching look (it doesn't see external CSS):
-      • cyan robotHalo drop-shadow on the head group   (matches
-        `drop-shadow(0 0 8px rgba(64,216,248,0.25))` on `.robot-logo`)
-      • per-eye opacity from `glow` (0.82..1.0 sine — `eyeGlow` keyframe)
-        plus a mid-blink opacity dip when an eye is mostly closed
-        (mirrors the 0.6 opacity at scaleY(0.07) in `eyeBlink`).
-      • per-eye `ry`, with left/right driven on independent timers in
-        the widget (matches the 0.08 s blink stagger).
-    """
+    """Return SVG for Trego — the animated smart tech boy assistant."""
     if ry_right is None:
         ry_right = ry_left
 
-    def _eye_opacity(ry: float) -> float:
-        # eyeGlow keyframe: continuous pulse 0.82..1.0 (driven by `glow`).
-        # eyeBlink keyframe: at peak-close (ry≈0.3) opacity drops to 0.6.
-        base = glow
-        if ry < 1.0:
-            # Smoothly fade toward 0.6 as the eye closes.
-            t = max(0.0, min(1.0, (1.0 - ry) / 0.7))
-            return base * (1 - t) + 0.6 * t
-        return base
+    def _eye_scale(ry: float) -> float:
+        # Scale eye height relative to open base (5.8)
+        return max(0.1, min(1.0, ry / 5.8))
 
-    op_left = _eye_opacity(ry_left)
-    op_right = _eye_opacity(ry_right)
+    scale_l = _eye_scale(ry_left)
+    scale_r = _eye_scale(ry_right)
 
-    # LED highlight opacity tracks the brighter eye so the face doesn't
-    # go dark mid-blink. Averaged ry * glow scales the highlight depth.
-    avg_ry = (ry_left + ry_right) / 2
-    base_led = max(0.0, (avg_ry - 0.4) / 5.4) * 0.55
-    led_op = base_led * glow
-    eye_cy  = 19.5 if thinking else 23.0
-    led_cy  = 17.0 if thinking else 20.5
-    led2_cy = 16.0 if thinking else 19.5
-    # eyeBloom std-deviation scales with glow — at peak the halo widens,
-    # matching the brightness(1.25) bump in the eyeGlow keyframe.
-    bloom_std = 2.2 + 0.6 * (glow - 1.0)
-    return f"""<svg viewBox="0 0 40 44" width="{ROBOT_SIZE}" height="{ROBOT_SIZE}" xmlns="http://www.w3.org/2000/svg">
+    # Pupil position adjusts when thinking (glancing upward thoughtfully)
+    eye_cy = 20.0 if thinking else 22.5
+    pupil_cy = 19.0 if thinking else 22.5
+    mouth_path = "M 18 31 Q 21 34 24 31" if not thinking else "M 18 31 Q 21 32 23 30"
+    eyebrow_l = "M 13 16 Q 16 14 19 16" if not thinking else "M 13 15 Q 16 12 19 15"
+    eyebrow_r = "M 23 16 Q 26 14 29 16" if not thinking else "M 23 15 Q 26 13 29 17"
+
+    # Pulse intensity for smart earpiece & cyber visor
+    led_color = "#00f0ff"
+    glow_opacity = max(0.5, min(1.0, 0.75 * glow))
+
+    return f"""<svg viewBox="0 0 42 46" width="{ROBOT_SIZE}" height="{ROBOT_SIZE}" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="rHead" cx="38%" cy="28%" r="72%">
-      <stop offset="0%" stop-color="#e8eef8"/>
-      <stop offset="60%" stop-color="#b8c8df"/>
-      <stop offset="100%" stop-color="#7a95b8"/>
-    </radialGradient>
-    <radialGradient id="rEar" cx="30%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#c5d3e8"/>
-      <stop offset="100%" stop-color="#8099b8"/>
-    </radialGradient>
-    <radialGradient id="rEye" cx="38%" cy="32%" r="62%">
-      <stop offset="0%" stop-color="#d0f8ff"/>
-      <stop offset="35%" stop-color="#40d8f8"/>
-      <stop offset="100%" stop-color="#0088bb"/>
-    </radialGradient>
-    <filter id="eyeBloom" x="-100%" y="-100%" width="300%" height="300%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="{bloom_std:.2f}" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <filter id="headShadow" x="-10%" y="-5%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#4a6a9a" flood-opacity="0.35"/>
+    <!-- Skin gradient -->
+    <linearGradient id="boySkin" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffedd5"/>
+      <stop offset="100%" stop-color="#fed7aa"/>
+    </linearGradient>
+    <!-- Hair gradient -->
+    <linearGradient id="boyHair" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4338ca"/>
+      <stop offset="45%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <!-- Hoodie gradient -->
+    <linearGradient id="boyHoodie" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <!-- Cyber glow filter -->
+    <filter id="cyberGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
   </defs>
-  <rect x="0"    y="17" width="7"  height="11" rx="3.5" fill="url(#rEar)"/>
-  <rect x="1.5"  y="19.5" width="3" height="6" rx="1.5" fill="#1a2030" opacity="0.4"/>
-  <rect x="33"   y="17" width="7"  height="11" rx="3.5" fill="url(#rEar)"/>
-  <rect x="35.5" y="19.5" width="3" height="6" rx="1.5" fill="#1a2030" opacity="0.4"/>
-  <rect x="6" y="5" width="28" height="35" rx="10" fill="url(#rHead)" filter="url(#headShadow)"/>
-  <rect x="16" y="2" width="8" height="7" rx="3.5" fill="#b8c8df"/>
-  <rect x="18" y="1" width="4" height="4" rx="2"   fill="#9aafc8"/>
-  <rect x="9" y="12" width="22" height="22" rx="6" fill="#0d1825"/>
-  <rect x="10" y="13" width="10" height="4" rx="2" fill="white" opacity="0.04"/>
-  <ellipse cx="15.5" cy="{eye_cy}" rx="4.5" ry="{ry_left}"  opacity="{op_left:.2f}"  fill="url(#rEye)" filter="url(#eyeBloom)"/>
-  <ellipse cx="24.5" cy="{eye_cy}" rx="4.5" ry="{ry_right}" opacity="{op_right:.2f}" fill="url(#rEye)" filter="url(#eyeBloom)"/>
-  <circle cx="13.8" cy="{led_cy}" r="1.1" fill="white" opacity="{led_op:.2f}"/>
-  <circle cx="22.8" cy="{led_cy}" r="1.1" fill="white" opacity="{led_op:.2f}"/>
-  <circle cx="15"   cy="{led2_cy}" r="0.5" fill="white" opacity="{led_op*0.55:.2f}"/>
-  <circle cx="24"   cy="{led2_cy}" r="0.5" fill="white" opacity="{led_op*0.55:.2f}"/>
+
+  <!-- Cyber Hoodie / Collar -->
+  <path d="M 9 39 Q 21 35 33 39 L 36 46 L 6 46 Z" fill="url(#boyHoodie)"/>
+  <path d="M 12 40 Q 21 37 30 40" stroke="#00f0ff" stroke-width="1.2" fill="none" opacity="0.8"/>
+
+  <!-- Neck -->
+  <rect x="18" y="32" width="6" height="7" rx="3" fill="#fdba74"/>
+
+  <!-- Ears & Smart Headset -->
+  <ellipse cx="9" cy="24" rx="3.5" ry="4.5" fill="#fed7aa"/>
+  <ellipse cx="33" cy="24" rx="3.5" ry="4.5" fill="#fed7aa"/>
+  
+  <!-- Smart Earpiece / Cyber Communicator on Right Ear -->
+  <circle cx="34" cy="24" r="3.2" fill="#0f172a" stroke="#475569" stroke-width="0.8"/>
+  <circle cx="34" cy="24" r="1.6" fill="{led_color}" filter="url(#cyberGlow)" opacity="{glow_opacity}"/>
+
+  <!-- Head Base -->
+  <rect x="10" y="12" width="22" height="23" rx="10" fill="url(#boySkin)"/>
+
+  <!-- Cheerful Soft Cheeks -->
+  <circle cx="13" cy="27" r="2.2" fill="#f43f5e" opacity="0.25"/>
+  <circle cx="29" cy="27" r="2.2" fill="#f43f5e" opacity="0.25"/>
+
+  <!-- Stylish Spiky Hair (Back & Top Layer) -->
+  <path d="M 8 18 Q 8 7 21 6 Q 34 7 34 18 Q 36 12 33 8 Q 28 3 21 3 Q 13 3 9 9 Q 6 13 8 18 Z" fill="url(#boyHair)"/>
+  <!-- Front Bangs / Cool Strands -->
+  <path d="M 8 14 Q 13 18 17 14 Q 21 20 26 13 Q 30 18 34 14 Q 32 10 21 8 Q 11 10 8 14 Z" fill="url(#boyHair)"/>
+
+  <!-- Eyebrows -->
+  <path d="{eyebrow_l}" stroke="#1e1b4b" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  <path d="{eyebrow_r}" stroke="#1e1b4b" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+
+  <!-- Smart Glasses / Cyber Visor Frame (Translucent) -->
+  <rect x="11" y="18" width="8.5" height="8" rx="2.5" fill="rgba(6,182,212,0.1)" stroke="#06b6d4" stroke-width="0.8"/>
+  <rect x="22.5" y="18" width="8.5" height="8" rx="2.5" fill="rgba(6,182,212,0.1)" stroke="#06b6d4" stroke-width="0.8"/>
+  <line x1="19.5" y1="21" x2="22.5" y2="21" stroke="#06b6d4" stroke-width="0.8"/>
+
+  <!-- Left Eye -->
+  <g transform="translate(15.2, {eye_cy}) scale(1, {scale_l}) translate(-15.2, -{eye_cy})">
+    <ellipse cx="15.2" cy="{eye_cy}" rx="3.0" ry="3.8" fill="#0284c7"/>
+    <ellipse cx="15.2" cy="{pupil_cy}" rx="2.0" ry="2.6" fill="#0f172a"/>
+    <circle cx="14.3" cy="{pupil_cy - 1}" r="0.9" fill="#ffffff"/>
+    <circle cx="16.2" cy="{pupil_cy + 1}" r="0.4" fill="#ffffff" opacity="0.8"/>
+  </g>
+
+  <!-- Right Eye -->
+  <g transform="translate(26.8, {eye_cy}) scale(1, {scale_r}) translate(-26.8, -{eye_cy})">
+    <ellipse cx="26.8" cy="{eye_cy}" rx="3.0" ry="3.8" fill="#0284c7"/>
+    <ellipse cx="26.8" cy="{pupil_cy}" rx="2.0" ry="2.6" fill="#0f172a"/>
+    <circle cx="25.9" cy="{pupil_cy - 1}" r="0.9" fill="#ffffff"/>
+    <circle cx="27.8" cy="{pupil_cy + 1}" r="0.4" fill="#ffffff" opacity="0.8"/>
+  </g>
+
+  <!-- Nose -->
+  <circle cx="21" cy="27" r="0.6" fill="#fb923c"/>
+
+  <!-- Confident Smile -->
+  <path d="{mouth_path}" stroke="#7c2d12" stroke-width="1.3" stroke-linecap="round" fill="none"/>
 </svg>"""
 
 
@@ -386,7 +415,7 @@ class TREGOAssistant(QWidget):
         in_row.setSpacing(8)
 
         self.input = ExpandingTextEdit()
-        self.input.setPlaceholderText("voo, what can I help you do?")
+        self.input.setPlaceholderText("Trego, what can I help you do?")
         self.input.setFixedWidth(280)
         self.input.setMinimumWidth(0)
         self.input.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)

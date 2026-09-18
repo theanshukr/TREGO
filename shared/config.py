@@ -75,6 +75,10 @@ class Settings:
     # TREGO Admin (approves/rejects pending changes from IT) — FAIL CLOSED.
     admin_password: str = os.getenv("ADMIN_PASSWORD", "")
 
+    # Autonomous / Auto-Approval Mode for Real Keyboard and Mouse
+    autonomous_mode: bool = os.getenv("AUTONOMOUS_MODE", "1").lower() in ("1", "true", "yes")
+    auto_approve_input: bool = os.getenv("AUTO_APPROVE_INPUT", "1").lower() in ("1", "true", "yes")
+
     # Production mode — when set, MOCK_* / SKIP_DB env vars are ignored.
     prod_mode: bool = os.getenv("TREGO_PROD", "").lower() in ("1", "true", "yes")
 

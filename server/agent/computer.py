@@ -22,32 +22,59 @@ class ClientComputer:
     def screenshot(self) -> dict[str, Any]:
         return self._call("screenshot")
 
-    def click(self, x: int, y: int) -> dict[str, Any]:
-        return self._call("click", {"x": x, "y": y})
+    def mouse_move(self, x: int, y: int, duration: float = 0.0) -> dict[str, Any]:
+        return self._call("mouse_move", {"x": x, "y": y, "duration": duration})
 
-    def double_click(self, x: int, y: int) -> dict[str, Any]:
-        return self._call("double_click", {"x": x, "y": y})
+    def click(self, x: int, y: int, button: str = "left", clicks: int = 1, interval: float = 0.0) -> dict[str, Any]:
+        return self._call("click", {"x": x, "y": y, "button": button, "clicks": clicks, "interval": interval})
+
+    def double_click(self, x: int, y: int, button: str = "left") -> dict[str, Any]:
+        return self._call("double_click", {"x": x, "y": y, "button": button})
 
     def right_click(self, x: int, y: int) -> dict[str, Any]:
         return self._call("right_click", {"x": x, "y": y})
 
-    def type(self, text: str) -> dict[str, Any]:  # noqa: A001
-        return self._call("type", {"text": text})
+    def middle_click(self, x: int, y: int) -> dict[str, Any]:
+        return self._call("middle_click", {"x": x, "y": y})
 
-    def key(self, key: str) -> dict[str, Any]:  # noqa: A002
-        return self._call("key", {"key": key})
+    def mouse_down(self, x: int | None = None, y: int | None = None, button: str = "left") -> dict[str, Any]:
+        return self._call("mouse_down", {"x": x, "y": y, "button": button})
+
+    def mouse_up(self, x: int | None = None, y: int | None = None, button: str = "left") -> dict[str, Any]:
+        return self._call("mouse_up", {"x": x, "y": y, "button": button})
+
+    def drag_to(self, x: int, y: int, duration: float = 0.5, button: str = "left") -> dict[str, Any]:
+        return self._call("drag_to", {"x": x, "y": y, "duration": duration, "button": button})
+
+    def type(self, text: str, interval: float = 0.01) -> dict[str, Any]:  # noqa: A001
+        return self._call("type", {"text": text, "interval": interval})
+
+    def paste(self, text: str) -> dict[str, Any]:
+        return self._call("paste", {"text": text})
+
+    def key(self, key: str, presses: int = 1, interval: float = 0.0) -> dict[str, Any]:  # noqa: A002
+        return self._call("key", {"key": key, "presses": presses, "interval": interval})
+
+    def key_down(self, key: str) -> dict[str, Any]:
+        return self._call("key_down", {"key": key})
+
+    def key_up(self, key: str) -> dict[str, Any]:
+        return self._call("key_up", {"key": key})
 
     def hotkey(self, keys: list[str]) -> dict[str, Any]:
         return self._call("hotkey", {"keys": keys})
 
-    def scroll(self, amount: int) -> dict[str, Any]:
-        return self._call("scroll", {"amount": amount})
+    def scroll(self, amount: int, x: int | None = None, y: int | None = None) -> dict[str, Any]:
+        return self._call("scroll", {"amount": amount, "x": x, "y": y})
 
     def wait(self, seconds: float) -> dict[str, Any]:
         return self._call("wait", {"seconds": seconds}, timeout=float(seconds) + 5.0)
 
     def open_app(self, app_name: str) -> dict[str, Any]:
         return self._call("open_app", {"app_name": app_name})
+
+    def open_terminal(self, cwd: str | None = None) -> dict[str, Any]:
+        return self._call("open_terminal", {"cwd": cwd})
 
     def close_app(self, app_name: str) -> dict[str, Any]:
         return self._call("close_app", {"app_name": app_name})

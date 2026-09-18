@@ -11,6 +11,7 @@ import tests.test_command_policy as t_policy
 import tests.test_goal_interpreter as t_goal
 import tests.test_troubleshooter as t_trouble
 import tests.test_modules as t_mod
+import tests.test_real_input as t_input
 
 tests_to_run = [
     ("Command Policy: Read-Only", t_policy.test_read_only_commands_allowed),
@@ -27,6 +28,9 @@ tests_to_run = [
     ("Modules: C++ Detect & Requirements", t_mod.test_cpp_module_detect_and_requirements),
     ("Modules: Python Real Verification", t_mod.test_python_module_real_verify),
     ("Modules: Flutter Doctor & Diagnostics", t_mod.test_flutter_module_parse_doctor),
+    ("Real Input: Protocol & Tool Schemas", t_input.test_real_input_protocol_and_schemas),
+    ("Real Input: Mouse & Keyboard Validation", t_input.test_real_input_arg_validation),
+    ("Real Input: Client & Executor Proxies", t_input.test_real_input_proxies),
 ]
 
 passed = 0

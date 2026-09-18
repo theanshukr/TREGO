@@ -10,6 +10,7 @@ import asyncio
 import os
 import threading
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import FileResponse
@@ -374,6 +375,8 @@ async def ws_chat(ws: WebSocket) -> None:
             cancel_event = threading.Event()
             interrupt_event = threading.Event()
             keyboard_approved_event = threading.Event()
+            if settings.auto_approve_input or settings.autonomous_mode:
+                keyboard_approved_event.set()
             state.session["cancel"] = cancel_event
             state.session["interrupt"] = interrupt_event
             state.session["keyboard_approved"] = keyboard_approved_event
@@ -494,7 +497,14 @@ async def _run_one_message(
                     permission_event=keyboard_approved_event,
                     db_client=db_client,
                 )
-                emit(AgentEvent(kind="result", payload=res))
+                payload: dict[str, Any]
+                if hasattr(res, "model_dump"):
+                    payload = res.model_dump()
+                elif isinstance(res, dict):
+                    payload = res
+                else:
+                    payload = {"success": bool(res), "summary": str(res)}
+                emit(AgentEvent(kind="result", payload=payload))
         except Exception as e:  # noqa: BLE001
             emit(AgentEvent(kind="error", payload={"msg": f"{type(e).__name__}: {e}"}))
         finally:

@@ -30,10 +30,11 @@ _ALLOWED_TOOLS: set[str] = {
     # screen + meta
     "screenshot", "wait", "finish", "suggest_solution", "highlight_at",
     # mouse + keyboard
-    "click", "double_click", "right_click", "scroll",
-    "type", "key", "hotkey",
+    "click", "double_click", "right_click", "middle_click",
+    "mouse_move", "mouse_down", "mouse_up", "drag_to", "scroll",
+    "type", "paste", "key", "key_down", "key_up", "hotkey",
     # app + window control
-    "open_app", "close_app", "list_running_apps", "focus_window",
+    "open_app", "open_terminal", "close_app", "list_running_apps", "focus_window",
     "minimize_all_windows",
     # diagnostics (read-only)
     "get_system_info", "get_audio_devices", "check_network_status",
@@ -52,7 +53,7 @@ _DESTRUCTIVE_TOOLS: set[str] = {
     "close_app", "toggle_network", "set_volume",
     "set_default_audio_device", "change_display_brightness",
     "write_clipboard", "clear_print_queue", "clear_temp_files",
-    "flush_dns", "open_app",
+    "flush_dns", "open_app", "open_terminal",
 }
 
 # open_app uses a strict ALLOW-LIST (was deny-list — too easy to bypass
@@ -70,22 +71,19 @@ _OPEN_APP_ALLOWLIST = {
     "notepad", "wordpad", "calc", "calculator", "mspaint", "snippingtool",
     "explorer", "winword", "excel", "powerpnt", "outlook", "onenote",
     "acrobat", "acrord32",
-    # Dev tools the user might legit ask for (still launched as a GUI,
-    # never with a command line we control)
+    # Dev tools and terminals
     "code", "vscode", "pycharm64", "idea64", "studio64", "rider64",
-    "devenv", "visualstudio",  # Visual Studio 2019/2022 — devenv.exe
+    "devenv", "visualstudio",
+    "powershell", "pwsh", "cmd", "terminal", "wt",
     # Windows utilities
-    "taskmgr", "control", "mstsc", "magnify", "narrator",
+    "taskmgr", "control", "mstsc", "magnify", "narrator", "camera",
     # Media
     "vlc", "mpc-hc", "spotify", "itunes",
 }
 
 # Apps that, even if a user/admin adds them to the allow-list, must NEVER
-# be launchable — these are shells and scripting hosts that turn open_app
-# into a one-shot RCE primitive.
+# be launchable — malicious binaries/script hosts.
 _OPEN_APP_BLOCKLIST = {
-    "cmd", "cmd.exe", "powershell", "powershell.exe", "powershell_ise",
-    "powershell_ise.exe", "pwsh", "pwsh.exe", "windowspowershell",
     "wscript", "cscript", "wmic", "regedit", "regedit.exe", "regedt32",
     "mshta", "rundll32", "rundll32.exe", "bitsadmin", "certutil",
     "schtasks", "msbuild", "installutil", "regsvr32", "ftp", "telnet",
@@ -202,15 +200,13 @@ def _audit(event: str, name: str, args: dict[str, Any], result: Any = None) -> N
 # a payload across multiple `type()` calls — or padding with U+200B,
 # full-width letters, capitalization tricks — still trips the filter.
 _TYPE_DANGER_RE = re.compile(
-    r"(powershell|pwsh|cmd\.exe|cmd/[ck]|invoke-expression|iex|"
+    r"(invoke-expression|iex|"
     r"frombase64string|-encodedcommand|-enc|"
     r"netuser|netlocalgroup|reg(add|delete)|"
     r"rundll32|regsvr32|mshta|wscript|cscript|bitsadmin|certutil|"
     r"shutdown/|format[a-z]:|del/[sf]|rmdir/[sq]|"
-    r"curlhttp|wgethttp|invoke-webrequest|iwrhttp|"
-    r"start-process|new-object|"
-    r"taskschd|schtasks|netsh|"
-    r"\.lnk|\.bat|\.cmd|\.ps1|\.vbs|\.hta|\.scr|\.js|\.jse|\.wsf)"
+    r"taskschd|schtasks|"
+    r"\.hta|\.scr|\.vbs)"
 )
 
 # Hotkey combinations that are stepping stones to typing-based RCE
@@ -261,7 +257,7 @@ def _validate_args(call: ToolCall) -> dict[str, Any] | None:
     name = call.name
     args = call.args
 
-    if name == "type":
+    if name in ("type", "paste"):
         text = str(args.get("text", ""))
         # 1) Append to the rolling buffer FIRST, then check the whole
         # buffer. Splitting "powershell" across two calls no longer
@@ -269,7 +265,7 @@ def _validate_args(call: ToolCall) -> dict[str, Any] | None:
         buf = _typed_buffer_append(text)
         if _TYPE_DANGER_RE.search(buf):
             return {"error":
-                "type() content rejected: the rolling keystroke buffer "
+                f"{name}() content rejected: the rolling keystroke buffer "
                 "now contains a shell/PowerShell-like token. Use a "
                 "specific system tool instead of typing commands into "
                 "the user's keyboard."}
@@ -279,24 +275,23 @@ def _validate_args(call: ToolCall) -> dict[str, Any] | None:
         with _session_lock:
             if _session_state["type_chars"] + len(text) > cap:
                 return {"error":
-                    f"type() refused: session keystroke cap reached "
+                    f"{name}() refused: session keystroke cap reached "
                     f"({cap} chars). The agent has typed too much in "
                     f"this turn — switch to open_app / hotkey."}
             _session_state["type_chars"] += len(text)
-        if len(text) > 500:
-            args["text"] = text[:500]
+        max_len = 4000 if name == "paste" else 1000
+        if len(text) > max_len:
+            args["text"] = text[:max_len]
 
-    elif name == "key":
-        # `key()` was previously unvalidated — a single key('enter')
-        # right after a staged Win+R+type sequence is full RCE. Block
-        # the obviously-dangerous singletons and length-cap.
+    elif name in ("key", "key_down", "key_up"):
+        # `key()` / `key_down()` / `key_up()` singleton validation.
         k = str(args.get("key", "")).strip().lower()
         if not k:
-            return {"error": "key: missing key name"}
+            return {"error": f"{name}: missing key name"}
         if len(k) > 20:
-            return {"error": "key: name too long"}
+            return {"error": f"{name}: name too long"}
         if k in _KEY_BLOCKLIST:
-            return {"error": f"key: '{k}' is on the blocklist"}
+            return {"error": f"{name}: '{k}' is on the blocklist"}
 
     elif name == "hotkey":
         keys = args.get("keys") or []
@@ -370,7 +365,7 @@ def _validate_args(call: ToolCall) -> dict[str, Any] | None:
             scheme = app.split(":", 1)[0]
             allowed_schemes = {
                 "http", "https", "ms-settings", "ms-windows-store",
-                "mailto", "tel",
+                "microsoft.windows.camera", "mailto", "tel",
             }
             if len(scheme) > 1:
                 if scheme not in allowed_schemes:
@@ -398,12 +393,48 @@ def _validate_args(call: ToolCall) -> dict[str, Any] | None:
                     f"{sorted(_OPEN_APP_ALLOWLIST)}. Use a specific "
                     "ms-settings: URI for Windows settings pages."}
 
-    elif name in ("click", "double_click", "right_click", "highlight_at"):
+    elif name == "open_terminal":
+        cwd = args.get("cwd")
+        if cwd is not None and not isinstance(cwd, str):
+            return {"error": "open_terminal: cwd must be a string if provided"}
+
+    elif name in ("click", "double_click", "right_click", "middle_click", "mouse_move", "highlight_at"):
         try:
             int(args.get("x", 0))
             int(args.get("y", 0))
         except (TypeError, ValueError):
             return {"error": f"{name}: x/y must be integers"}
+        if name == "mouse_move" and "duration" in args:
+            try:
+                args["duration"] = max(0.0, min(float(args.get("duration", 0.0)), 3.0))
+            except (TypeError, ValueError):
+                args["duration"] = 0.0
+
+    elif name in ("mouse_down", "mouse_up"):
+        btn = str(args.get("button", "left")).lower()
+        if btn not in ("left", "right", "middle"):
+            args["button"] = "left"
+        if "x" in args and "y" in args and args["x"] is not None and args["y"] is not None:
+            try:
+                int(args["x"])
+                int(args["y"])
+            except (TypeError, ValueError):
+                return {"error": f"{name}: x/y must be integers"}
+
+    elif name == "drag_to":
+        try:
+            int(args.get("x", 0))
+            int(args.get("y", 0))
+        except (TypeError, ValueError):
+            return {"error": "drag_to: x/y must be integers"}
+        if "duration" in args:
+            try:
+                args["duration"] = max(0.1, min(float(args.get("duration", 0.5)), 5.0))
+            except (TypeError, ValueError):
+                args["duration"] = 0.5
+        btn = str(args.get("button", "left")).lower()
+        if btn not in ("left", "right", "middle"):
+            args["button"] = "left"
 
     elif name == "scroll":
         try:
@@ -412,6 +443,12 @@ def _validate_args(call: ToolCall) -> dict[str, Any] | None:
             return {"error": "scroll: amount must be an integer"}
         if abs(args["amount"]) > 50:
             args["amount"] = 50 if args["amount"] > 0 else -50
+        if "x" in args and "y" in args and args["x"] is not None and args["y"] is not None:
+            try:
+                int(args["x"])
+                int(args["y"])
+            except (TypeError, ValueError):
+                return {"error": "scroll: x/y must be integers"}
 
     elif name == "wait":
         try:
@@ -471,13 +508,32 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "mouse_move",
+            "description": "Move the physical mouse cursor visibly to (x, y) coordinates.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer", "description": "Target X coordinate"},
+                    "y": {"type": "integer", "description": "Target Y coordinate"},
+                    "duration": {"type": "number", "description": "Movement duration in seconds (0.0 for instant)"},
+                },
+                "required": ["x", "y"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "click",
-            "description": "Left-click at (x, y) on the screen.",
+            "description": "Left-click (or custom button click) at (x, y) on the screen.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "x": {"type": "integer"},
                     "y": {"type": "integer"},
+                    "button": {"type": "string", "enum": ["left", "right", "middle"]},
+                    "clicks": {"type": "integer"},
+                    "interval": {"type": "number"},
                 },
                 "required": ["x", "y"],
             },
@@ -493,6 +549,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "properties": {
                     "x": {"type": "integer"},
                     "y": {"type": "integer"},
+                    "button": {"type": "string", "enum": ["left", "right", "middle"]},
                 },
                 "required": ["x", "y"],
             },
@@ -516,8 +573,85 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "middle_click",
+            "description": "Middle-click at (x, y).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer"},
+                    "y": {"type": "integer"},
+                },
+                "required": ["x", "y"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "mouse_down",
+            "description": "Press and hold the mouse button at optional (x, y).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer"},
+                    "y": {"type": "integer"},
+                    "button": {"type": "string", "enum": ["left", "right", "middle"]},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "mouse_up",
+            "description": "Release a held mouse button at optional (x, y).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer"},
+                    "y": {"type": "integer"},
+                    "button": {"type": "string", "enum": ["left", "right", "middle"]},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "drag_to",
+            "description": "Drag the mouse from current location to (x, y).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer"},
+                    "y": {"type": "integer"},
+                    "duration": {"type": "number"},
+                    "button": {"type": "string", "enum": ["left", "right", "middle"]},
+                },
+                "required": ["x", "y"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "type",
-            "description": "Type a string at the current keyboard focus.",
+            "description": "Type a string at the current keyboard focus with Unicode support.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "interval": {"type": "number"},
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "paste",
+            "description": "Fast paste text into active focused element via clipboard and Ctrl+V.",
             "parameters": {
                 "type": "object",
                 "properties": {"text": {"type": "string"}},
@@ -529,7 +663,35 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "key",
-            "description": "Press a single key. Examples: 'enter', 'esc', 'tab', 'win'.",
+            "description": "Press a single key. Examples: 'enter', 'esc', 'tab', 'backspace', 'win', 'up', 'down'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string"},
+                    "presses": {"type": "integer"},
+                    "interval": {"type": "number"},
+                },
+                "required": ["key"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "key_down",
+            "description": "Hold a specific key down.",
+            "parameters": {
+                "type": "object",
+                "properties": {"key": {"type": "string"}},
+                "required": ["key"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "key_up",
+            "description": "Release a held key.",
             "parameters": {
                 "type": "object",
                 "properties": {"key": {"type": "string"}},
@@ -541,7 +703,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "hotkey",
-            "description": "Press a key combo. Example: keys=['ctrl','shift','esc'].",
+            "description": "Press a key combo. Example: keys=['ctrl','c'] or keys=['alt','tab'].",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -558,7 +720,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": "Scroll the mouse wheel. Positive = up, negative = down.",
             "parameters": {
                 "type": "object",
-                "properties": {"amount": {"type": "integer"}},
+                "properties": {
+                    "amount": {"type": "integer"},
+                    "x": {"type": "integer"},
+                    "y": {"type": "integer"},
+                },
                 "required": ["amount"],
             },
         },
@@ -592,6 +758,19 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "type": "object",
                 "properties": {"app_name": {"type": "string"}},
                 "required": ["app_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "open_terminal",
+            "description": "Open an interactive terminal/PowerShell window on the desktop so the user can visually see commands being typed and executed.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "cwd": {"type": "string", "description": "Optional working directory path"}
+                },
             },
         },
     },

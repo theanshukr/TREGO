@@ -13,8 +13,16 @@ ToolName = Literal[
     "click",
     "double_click",
     "right_click",
+    "middle_click",
+    "mouse_move",
+    "mouse_down",
+    "mouse_up",
+    "drag_to",
     "type",
+    "paste",
     "key",
+    "key_down",
+    "key_up",
     "hotkey",
     "scroll",
     "screenshot",
@@ -49,6 +57,7 @@ ToolName = Literal[
     "get_event_log_errors",
     "list_startup_programs",
     "run_dev_cmd",
+    "open_terminal",
 ]
 
 EventKind = Literal[

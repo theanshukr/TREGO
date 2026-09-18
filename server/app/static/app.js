@@ -270,17 +270,42 @@ function esc(str) {
 const INTRO_HTML = `
   <div class="msg intro">
     <div class="intro-content">
-      <div class="trego-hero-icon">
-        <svg viewBox="0 0 32 32" width="56" height="56" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="16" cy="16" r="14" stroke="url(#introGrad)" stroke-width="2.5"/>
-          <path d="M10 16L14 20L22 12" stroke="#00f0ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <div class="trego-hero-icon" style="margin-bottom:12px;">
+        <svg viewBox="0 0 42 46" width="68" height="68" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <linearGradient id="introGrad" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#4f46e5"/>
-              <stop offset="0.5" stop-color="#06b6d4"/>
-              <stop offset="1" stop-color="#10b981"/>
+            <linearGradient id="introSkin" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#ffedd5"/>
+              <stop offset="100%" stop-color="#fed7aa"/>
+            </linearGradient>
+            <linearGradient id="introHair" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#4338ca"/>
+              <stop offset="45%" stop-color="#1e1b4b"/>
+              <stop offset="100%" stop-color="#0f172a"/>
             </linearGradient>
           </defs>
+          <path d="M 9 39 Q 21 35 33 39 L 36 46 L 6 46 Z" fill="#0f172a"/>
+          <path d="M 12 40 Q 21 37 30 40" stroke="#00f0ff" stroke-width="1.5" fill="none"/>
+          <rect x="18" y="32" width="6" height="7" rx="3" fill="#fdba74"/>
+          <ellipse cx="9" cy="24" rx="3.5" ry="4.5" fill="#fed7aa"/>
+          <ellipse cx="33" cy="24" rx="3.5" ry="4.5" fill="#fed7aa"/>
+          <circle cx="34" cy="24" r="3.2" fill="#0f172a"/>
+          <circle cx="34" cy="24" r="1.8" fill="#00f0ff"/>
+          <rect x="10" y="12" width="22" height="23" rx="10" fill="url(#introSkin)"/>
+          <circle cx="13" cy="27" r="2.5" fill="#f43f5e" opacity="0.3"/>
+          <circle cx="29" cy="27" r="2.5" fill="#f43f5e" opacity="0.3"/>
+          <path d="M 8 18 Q 8 7 21 6 Q 34 7 34 18 Q 36 12 33 8 Q 28 3 21 3 Q 13 3 9 9 Q 6 13 8 18 Z" fill="url(#introHair)"/>
+          <path d="M 8 14 Q 13 18 17 14 Q 21 20 26 13 Q 30 18 34 14 Q 32 10 21 8 Q 11 10 8 14 Z" fill="url(#introHair)"/>
+          <rect x="11" y="18" width="8.5" height="8" rx="2.5" fill="rgba(6,182,212,0.15)" stroke="#06b6d4" stroke-width="1"/>
+          <rect x="22.5" y="18" width="8.5" height="8" rx="2.5" fill="rgba(6,182,212,0.15)" stroke="#06b6d4" stroke-width="1"/>
+          <line x1="19.5" y1="21" x2="22.5" y2="21" stroke="#06b6d4" stroke-width="1"/>
+          <ellipse cx="15.2" cy="22.5" rx="3.0" ry="3.8" fill="#0284c7"/>
+          <ellipse cx="15.2" cy="22.5" rx="2.0" ry="2.6" fill="#0f172a"/>
+          <circle cx="14.3" cy="21.5" r="0.9" fill="#ffffff"/>
+          <ellipse cx="26.8" cy="22.5" rx="3.0" ry="3.8" fill="#0284c7"/>
+          <ellipse cx="26.8" cy="22.5" rx="2.0" ry="2.6" fill="#0f172a"/>
+          <circle cx="25.9" cy="21.5" r="0.9" fill="#ffffff"/>
+          <circle cx="21" cy="27" r="0.6" fill="#fb923c"/>
+          <path d="M 18 31 Q 21 34 24 31" stroke="#7c2d12" stroke-width="1.3" stroke-linecap="round" fill="none"/>
         </svg>
       </div>
       <h2>Tell it. Let it go.</h2>

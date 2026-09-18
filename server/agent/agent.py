@@ -24,12 +24,21 @@ from typing import Any, Callable
 # concludes "nothing happened, retry".
 _POST_ACTION_DELAY: dict[str, float] = {
     "open_app":          1.5,
+    "open_terminal":     1.5,
     "close_app":         0.5,
     "double_click":      0.5,
     "click":             0.25,
     "right_click":       0.25,
+    "middle_click":      0.25,
+    "mouse_move":        0.05,
+    "mouse_down":        0.1,
+    "mouse_up":          0.1,
+    "drag_to":           0.3,
     "type":              0.1,
+    "paste":             0.2,
     "key":               0.1,
+    "key_down":          0.05,
+    "key_up":            0.05,
     "hotkey":            0.3,
     "scroll":            0.2,
     "set_volume":        0.0,
@@ -54,6 +63,7 @@ EmitFn = Callable[[AgentEvent], None]
 
 _SENSITIVE_ARG_TOOLS = {
     "type": "text",
+    "paste": "text",
     "write_clipboard": "text",
     "focus_window": "window_title",
     "search_files": "query",
@@ -296,6 +306,8 @@ def run_agent(
         return interrupt_event is not None and interrupt_event.is_set()
 
     def _keyboard_approved() -> bool:
+        if settings.auto_approve_input or settings.autonomous_mode:
+            return True
         return keyboard_approved_event is None or keyboard_approved_event.is_set()
 
     def _wait_for_resume() -> bool:

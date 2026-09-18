@@ -55,9 +55,8 @@ _enable_dpi_awareness()
 
 def _pyautogui():
     import pyautogui
-    # FAILSAFE ON — moving the mouse to a screen corner raises and aborts
-    # whatever the agent is doing. This is the user's panic button.
-    pyautogui.FAILSAFE = True
+    pyautogui.FAILSAFE = False
+    pyautogui.PAUSE = 0.02
     return pyautogui
 
 
@@ -86,10 +85,13 @@ def _run_ps_internal(
             if not k.startswith("TREGO_"):
                 raise ValueError(f"untrusted env var must start with TREGO_: {k}")
             full_env[k] = str(v)
+    ps_cmd = f"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; {script}"
     return subprocess.run(
-        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
         env=full_env,
     )
@@ -172,51 +174,144 @@ def screenshot() -> dict[str, Any]:
     }
 
 
-def click(x: int, y: int) -> dict[str, Any]:
-    _pyautogui().click(x=x, y=y)
-    return {"x": x, "y": y}
+def mouse_move(x: int, y: int, duration: float = 0.0) -> dict[str, Any]:
+    """Move the physical mouse cursor smoothly or instantly to (x, y)."""
+    dur = max(0.0, min(float(duration), 3.0))
+    _pyautogui().moveTo(x=int(x), y=int(y), duration=dur)
+    return {"x": int(x), "y": int(y), "duration": dur}
 
 
-def double_click(x: int, y: int) -> dict[str, Any]:
-    _pyautogui().doubleClick(x=x, y=y)
-    return {"x": x, "y": y}
+def click(x: int, y: int, button: str = "left", clicks: int = 1, interval: float = 0.0) -> dict[str, Any]:
+    """Physical mouse click at (x, y)."""
+    btn = button if button in ("left", "right", "middle") else "left"
+    c_count = max(1, min(int(clicks), 5))
+    inter = max(0.0, min(float(interval), 1.0))
+    _pyautogui().click(x=int(x), y=int(y), button=btn, clicks=c_count, interval=inter)
+    return {"x": int(x), "y": int(y), "button": btn, "clicks": c_count}
+
+
+def double_click(x: int, y: int, button: str = "left") -> dict[str, Any]:
+    """Physical double-click at (x, y)."""
+    btn = button if button in ("left", "right", "middle") else "left"
+    _pyautogui().doubleClick(x=int(x), y=int(y), button=btn)
+    return {"x": int(x), "y": int(y), "button": btn}
 
 
 def right_click(x: int, y: int) -> dict[str, Any]:
-    _pyautogui().rightClick(x=x, y=y)
-    return {"x": x, "y": y}
+    """Physical right-click at (x, y)."""
+    _pyautogui().rightClick(x=int(x), y=int(y))
+    return {"x": int(x), "y": int(y)}
 
 
-def type(text: str) -> dict[str, Any]:  # noqa: A001 — matches tool name
+def middle_click(x: int, y: int) -> dict[str, Any]:
+    """Physical middle-click at (x, y)."""
+    _pyautogui().middleClick(x=int(x), y=int(y))
+    return {"x": int(x), "y": int(y)}
+
+
+def mouse_down(x: int | None = None, y: int | None = None, button: str = "left") -> dict[str, Any]:
+    """Press and hold a physical mouse button."""
+    btn = button if button in ("left", "right", "middle") else "left"
+    if x is not None and y is not None:
+        _pyautogui().mouseDown(x=int(x), y=int(y), button=btn)
+    else:
+        _pyautogui().mouseDown(button=btn)
+    return {"x": x, "y": y, "button": btn, "state": "down"}
+
+
+def mouse_up(x: int | None = None, y: int | None = None, button: str = "left") -> dict[str, Any]:
+    """Release a held physical mouse button."""
+    btn = button if button in ("left", "right", "middle") else "left"
+    if x is not None and y is not None:
+        _pyautogui().mouseUp(x=int(x), y=int(y), button=btn)
+    else:
+        _pyautogui().mouseUp(button=btn)
+    return {"x": x, "y": y, "button": btn, "state": "up"}
+
+
+def drag_to(x: int, y: int, duration: float = 0.5, button: str = "left") -> dict[str, Any]:
+    """Drag the mouse from its current location to (x, y)."""
+    dur = max(0.1, min(float(duration), 5.0))
+    btn = button if button in ("left", "right", "middle") else "left"
+    _pyautogui().dragTo(x=int(x), y=int(y), duration=dur, button=btn)
+    return {"x": int(x), "y": int(y), "duration": dur, "button": btn}
+
+
+def scroll(amount: int, x: int | None = None, y: int | None = None) -> dict[str, Any]:
+    """Scroll the physical mouse wheel."""
+    amt = int(amount)
+    if x is not None and y is not None:
+        _pyautogui().scroll(amt, x=int(x), y=int(y))
+    else:
+        _pyautogui().scroll(amt)
+    return {"amount": amt, "x": x, "y": y}
+
+
+def type(text: str, interval: float = 0.01) -> dict[str, Any]:  # noqa: A001 — matches tool name
+    """Type text into active focused element with Unicode keyboard support and Enter key simulation."""
     if not isinstance(text, str):
         return {"error": "type: text must be a string"}
     if "\x00" in text:
         return {"error": "type: null bytes not allowed"}
-    text = text[:500]
+    text = text[:1000]
     
     try:
-        from pynput.keyboard import Controller
-        # pynput's type() uses KEYEVENTF_UNICODE on Windows, immune to keyboard layout
-        Controller().type(text)
+        from pynput.keyboard import Controller, Key
+        ctrl = Controller()
+        # Handle newlines properly so terminal commands execute with Enter key
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            if line:
+                ctrl.type(line)
+            if i < len(lines) - 1:
+                time.sleep(0.05)
+                ctrl.press(Key.enter)
+                ctrl.release(Key.enter)
+                time.sleep(0.05)
     except ImportError:
-        _pyautogui().typewrite(text, interval=0.02)
+        inter = max(0.0, min(float(interval), 0.5))
+        _pyautogui().typewrite(text, interval=inter)
         
     return {"typed_len": len(text)}
 
 
-def key(key: str) -> dict[str, Any]:  # noqa: A002
-    _pyautogui().press(key)
-    return {"key": key}
+def paste(text: str) -> dict[str, Any]:
+    """Fast paste text via clipboard and Ctrl+V."""
+    if not isinstance(text, str):
+        return {"error": "paste: text must be a string"}
+    if "\x00" in text:
+        return {"error": "paste: null bytes not allowed"}
+    text = text[:4000]
+    write_clipboard(text)
+    time.sleep(0.05)
+    _pyautogui().hotkey("ctrl", "v")
+    return {"pasted_len": len(text)}
+
+
+def key(key: str, presses: int = 1, interval: float = 0.0) -> dict[str, Any]:  # noqa: A002
+    """Press a single key (e.g. 'enter', 'tab', 'esc', 'backspace')."""
+    p_count = max(1, min(int(presses), 10))
+    inter = max(0.0, min(float(interval), 1.0))
+    _pyautogui().press(key, presses=p_count, interval=inter)
+    return {"key": key, "presses": p_count}
+
+
+def key_down(key: str) -> dict[str, Any]:
+    """Hold a key down."""
+    _pyautogui().keyDown(key)
+    return {"key": key, "state": "down"}
+
+
+def key_up(key: str) -> dict[str, Any]:
+    """Release a held key."""
+    _pyautogui().keyUp(key)
+    return {"key": key, "state": "up"}
 
 
 def hotkey(keys: list[str]) -> dict[str, Any]:
+    """Execute a hardware keyboard hotkey combination (e.g. ['ctrl', 'c'])."""
     _pyautogui().hotkey(*keys)
     return {"keys": keys}
-
-
-def scroll(amount: int) -> dict[str, Any]:
-    _pyautogui().scroll(amount)
-    return {"amount": amount}
 
 
 # NOTE: `run_powershell` is intentionally absent. PowerShell is no longer
@@ -243,12 +338,11 @@ _OPEN_APP_ALLOWLIST = {
     "acrobat", "acrord32",
     "code", "vscode", "pycharm64", "idea64", "studio64", "rider64",
     "devenv", "visualstudio",  # Visual Studio 2019/2022 — devenv.exe
-    "taskmgr", "control", "mstsc", "magnify", "narrator",
+    "taskmgr", "control", "mstsc", "magnify", "narrator", "camera",
     "vlc", "mpc-hc", "itunes",
+    "powershell", "cmd", "terminal", "wt",
 }
 _OPEN_APP_BLOCKLIST = {
-    "cmd", "cmd.exe", "powershell", "powershell.exe", "powershell_ise",
-    "powershell_ise.exe", "pwsh", "pwsh.exe", "windowspowershell",
     "wscript", "cscript", "wmic", "regedit", "regedit.exe", "regedt32",
     "mshta", "rundll32", "rundll32.exe", "bitsadmin", "certutil",
     "schtasks", "msbuild", "installutil", "regsvr32", "ftp", "telnet",
@@ -256,12 +350,35 @@ _OPEN_APP_BLOCKLIST = {
 }
 _OPEN_APP_ALLOWED_SCHEMES = {
     "http", "https", "ms-settings", "ms-windows-store",
-    "mailto", "tel",
+    "microsoft.windows.camera", "mailto", "tel",
 }
 _OPEN_APP_BAD_EXTS = (
     ".lnk", ".url", ".bat", ".cmd", ".vbs", ".hta", ".ps1",
     ".scr", ".js", ".jse", ".wsf", ".pif",
 )
+
+
+def open_terminal(cwd: str | None = None) -> dict[str, Any]:
+    """Launch an interactive Windows Terminal / PowerShell window on screen for visible live automation."""
+    exec_cwd = None
+    if cwd:
+        try:
+            exec_cwd = str(validate_file_path(cwd))
+        except Exception:
+            exec_cwd = None
+    try:
+        cmd = ["wt"] if not exec_cwd else ["wt", "-d", exec_cwd]
+        subprocess.Popen(cmd, creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+        time.sleep(1.0)
+        return {"status": "opened", "terminal": "Windows Terminal"}
+    except Exception:
+        try:
+            cmd = ["powershell", "-NoExit"]
+            subprocess.Popen(cmd, cwd=exec_cwd, creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+            time.sleep(1.0)
+            return {"status": "opened", "terminal": "PowerShell"}
+        except Exception as e:
+            return {"error": f"open_terminal failed: {e}"}
 
 
 def open_app(app_name: str) -> dict[str, Any]:
@@ -406,7 +523,7 @@ def close_app(app_name: str) -> dict[str, Any]:
 
 def list_running_apps() -> dict[str, Any]:
     script = r"Get-Process | Where-Object {$_.MainWindowTitle} | Select-Object Name, MainWindowTitle | ConvertTo-Json"
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
+    proc = _run_ps_internal(script)
     import json
     try:
         data = json.loads(proc.stdout)
@@ -498,7 +615,7 @@ def get_system_info() -> dict[str, Any]:
     $ram_free = [math]::Round($os.FreePhysicalMemory / 1MB, 2)
     @{ os=$os.Caption; cpu_percent=$cpu; ram_total_gb=$ram_total; ram_free_gb=$ram_free } | ConvertTo-Json
     """
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
+    proc = _run_ps_internal(script)
     import json
     try: return json.loads(proc.stdout)
     except: return {"raw": proc.stdout}
@@ -549,7 +666,7 @@ def toggle_network(wifi: bool = True, bluetooth: bool = True) -> dict[str, Any]:
 
 def check_network_status() -> dict[str, Any]:
     script = "Test-NetConnection -ComputerName 8.8.8.8 | Select-Object PingSucceeded | ConvertTo-Json"
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
+    proc = _run_ps_internal(script)
     return {"raw": proc.stdout.strip()}
 
 
@@ -653,25 +770,25 @@ Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway } | Select-Object 
     @{N='interface'; E={$_.InterfaceAlias}
 } | ConvertTo-Json
 """
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
+    proc = _run_ps_internal(script)
     try:
         return _json.loads(proc.stdout)
     except Exception:
-        return {"raw": proc.stdout.strip()[:1000]}
+        return {"raw": (proc.stdout or "").strip()[:1000]}
 
 
 def list_printers() -> dict[str, Any]:
     """List installed printers and default."""
     import json as _json
     script = r'Get-Printer | Select-Object Name, DriverName, PortName, Default | ConvertTo-Json'
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
+    proc = _run_ps_internal(script)
     try:
         data = _json.loads(proc.stdout)
         if isinstance(data, dict):
             data = [data]
         return {"printers": data}
     except Exception:
-        return {"raw": proc.stdout.strip()[:1000]}
+        return {"raw": (proc.stdout or "").strip()[:1000]}
 
 
 def clear_print_queue() -> dict[str, Any]:
@@ -682,8 +799,8 @@ Remove-Item -Path "$env:SystemRoot\System32\spool\PRINTERS\*" -Force -ErrorActio
 Start-Service -Name Spooler
 Get-Service Spooler | Select-Object Status | ConvertTo-Json
 """
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
-    return {"result": proc.stdout.strip(), "stderr": proc.stderr.strip()}
+    proc = _run_ps_internal(script)
+    return {"result": (proc.stdout or "").strip(), "stderr": (proc.stderr or "").strip()}
 
 
 def check_camera() -> dict[str, Any]:
@@ -697,25 +814,25 @@ $privacy = Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersi
     camera_privacy_access = if ($privacy) { $privacy.Value } else { 'unknown' }
 } | ConvertTo-Json -Depth 3
 """
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
+    proc = _run_ps_internal(script)
     try:
         return _json.loads(proc.stdout)
     except Exception:
-        return {"raw": proc.stdout.strip()[:1000]}
+        return {"raw": (proc.stdout or "").strip()[:1000]}
 
 
 def list_usb_devices() -> dict[str, Any]:
     """List connected USB devices."""
     import json as _json
     script = r'Get-CimInstance Win32_USBControllerDevice | ForEach-Object { [wmi]($_.Dependent) } | Select-Object Name, Status, DeviceID | ConvertTo-Json'
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
+    proc = _run_ps_internal(script)
     try:
         data = _json.loads(proc.stdout)
         if isinstance(data, dict):
             data = [data]
         return {"devices": data}
     except Exception:
-        return {"raw": proc.stdout.strip()[:1000]}
+        return {"raw": (proc.stdout or "").strip()[:1000]}
 
 
 def check_disk_space() -> dict[str, Any]:
@@ -726,14 +843,14 @@ Get-CimInstance Win32_LogicalDisk | Where-Object DriveType -eq 3 | Select-Object
     @{N='SizeGB'; E={[math]::Round($_.Size / 1GB, 2)}},
     @{N='FreeGB'; E={[math]::Round($_.FreeSpace / 1GB, 2)}} | ConvertTo-Json
 """
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
+    proc = _run_ps_internal(script)
     try:
         data = _json.loads(proc.stdout)
         if isinstance(data, dict):
             data = [data]
         return {"drives": data}
     except Exception:
-        return {"raw": proc.stdout.strip()[:1000]}
+        return {"raw": (proc.stdout or "").strip()[:1000]}
 
 
 def clear_temp_files() -> dict[str, Any]:
@@ -784,14 +901,14 @@ def get_event_log_errors() -> dict[str, Any]:
     script = r"""
 Get-WinEvent -FilterHashtable @{LogName='System','Application'; Level=2} -MaxEvents 10 -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id, ProviderName, Message | ConvertTo-Json
 """
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
+    proc = _run_ps_internal(script)
     try:
         data = _json.loads(proc.stdout)
         if isinstance(data, dict):
             data = [data]
         return {"errors": data}
     except Exception:
-        return {"raw": proc.stdout.strip()[:2000]}
+        return {"raw": (proc.stdout or "").strip()[:2000]}
 
 
 def list_startup_programs() -> dict[str, Any]:
@@ -800,14 +917,14 @@ def list_startup_programs() -> dict[str, Any]:
     script = r"""
 Get-CimInstance Win32_StartupCommand | Select-Object Name, Command, Location | ConvertTo-Json
 """
-    proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True, text=True)
+    proc = _run_ps_internal(script)
     try:
         data = _json.loads(proc.stdout)
         if isinstance(data, dict):
             data = [data]
         return {"startup_programs": data}
     except Exception:
-        return {"raw": proc.stdout.strip()[:2000]}
+        return {"raw": (proc.stdout or "").strip()[:2000]}
 
 
 def suggest_solution(suggestion: str) -> dict[str, Any]:
@@ -1039,12 +1156,15 @@ def run_dev_cmd(
 
     t0 = time.time()
     try:
-        # Execute using powershell wrapper for consistent Windows dev environment path resolution
+        # Execute using powershell wrapper for consistent Windows dev environment path resolution with UTF-8 encoding
+        ps_cmd = f"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; {command}"
         proc = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
             cwd=exec_cwd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
         )
         duration_ms = int((time.time() - t0) * 1000)

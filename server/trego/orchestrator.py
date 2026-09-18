@@ -85,7 +85,19 @@ class TregoOrchestrator:
             emit(AgentEvent(kind="status", payload={"phase": "act", "msg": "Executing computer-use action loop..."}))
             # Fallback to standard VLM loop
             from server.agent.agent import run_agent
-            return run_agent(user_message, emit, cancel_event=cancel_event, interrupt_event=interrupt_event)
+            cid = getattr(computer, "client_id", "default")
+            sol = run_agent(
+                user_message,
+                emit,
+                cancel_event=cancel_event,
+                interrupt_event=interrupt_event,
+                keyboard_approved_event=permission_event,
+                client_id=cid,
+            )
+            return {
+                "success": getattr(sol, "success", True),
+                "summary": getattr(sol, "problem_summary", str(sol)),
+            }
 
         # ------------------------------------------------------------------
         # Phase 2: INSPECT
