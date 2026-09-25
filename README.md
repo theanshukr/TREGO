@@ -1,5 +1,5 @@
 # TREGO — Voice-first AI Computer Agent
-
+ 
 > **Tell it. Let it go.**
 
 TREGO is an AI computer agent that turns a user's natural language goal into a verified working result.
